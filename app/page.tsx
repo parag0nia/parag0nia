@@ -1,4 +1,22 @@
+import Image from "next/image"
 import Link from "next/link"
+
+export const metadata = {
+  title: "W8 DIM SUM EXPERIENCE",
+  description: "W8 DIM SUM EXPERIENCE at Rua do Açúcar 76, Lisboa",
+  openGraph: {
+    title: "W8 DIM SUM EXPERIENCE",
+    description: "W8 DIM SUM EXPERIENCE at Rua do Açúcar 76, Lisboa",
+    images: [
+      {
+        url: "/w8-dim-sum.png",
+        width: 1200,
+        height: 630,
+        alt: "W8 DIM SUM EXPERIENCE",
+      },
+    ],
+  },
+}
 
 export default function Home() {
   return (
@@ -7,12 +25,13 @@ export default function Home() {
         href="https://shotgun.live/en/events/w-8-x-dim-sum"
         className="block w-full h-full transition-opacity hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-gray-300"
       >
-        <div className="relative w-full h-full bg-black">
-          {/* Using a regular img tag as a fallback solution */}
-          <img
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/bg.jpg-dijHqYvXacjOniQwqmkYQi82hQVHjx.jpeg"
+        <div className="relative w-full h-full">
+          <Image
+            src="/w8-dim-sum.png"
             alt="W8 DIM SUM EXPERIENCE at Rua do Açucar 76"
-            className="absolute inset-0 w-full h-full object-cover"
+            fill
+            className="object-cover"
+            priority
           />
         </div>
       </Link>
