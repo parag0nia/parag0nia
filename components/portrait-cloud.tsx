@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from "react"
  * background gives a clean silhouette. For an opaque image, near-black pixels
  * are dropped instead, which works for portraits painted on a dark ground.
  *
- * Drag to orbit. Drop an image file onto the canvas to swap the portrait.
+ * Drag to orbit, scroll down to zoom in (it eases back out), drop an image file onto
+ * the canvas to swap the portrait.
  *
  * The camera has a short depth of field. Points are drawn in two passes through one
  * program: pass 0 draws the points inside the focal band as crisp opaque discs with
@@ -335,6 +336,14 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
     canvas.addEventListener("pointerup", onPointerUp)
     canvas.addEventListener("pointercancel", onPointerUp)
 
+    // Scrolling down zooms in; the zoom eases back out once the wheel stops.
+    let zoom = 0
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      zoom = Math.max(0, Math.min(1, zoom + e.deltaY * 0.0025))
+    }
+    canvas.addEventListener("wheel", onWheel, { passive: false })
+
     let width = 1
     let height = 1
     let dpr = 1
@@ -389,10 +398,12 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
       if (!cloud) return
 
+      zoom *= Math.exp(-dt * 1.4)
       const aspect = width / height
-      const fov = 0.7
+      const fov = 1.05
       // Fit the portrait's width on narrow screens, otherwise sit at a fixed distance.
-      const distance = Math.max(3.5, 1.15 / (Math.tan(fov / 2) * aspect))
+      const framed = Math.max(2.4, 1.15 / (Math.tan(fov / 2) * aspect))
+      const distance = framed * (1 - 0.55 * zoom)
       const tilt = 0.12 * Math.sin(t * 0.21)
       gl.uniformMatrix4fv(uniforms.uProj, false, perspective(fov, aspect, 0.1, 40))
       gl.uniformMatrix4fv(uniforms.uView, false, view(tilt + dragRotX, autoRotY + dragRotY, distance))
@@ -439,6 +450,7 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       canvas.removeEventListener("pointermove", onPointerMove)
       canvas.removeEventListener("pointerup", onPointerUp)
       canvas.removeEventListener("pointercancel", onPointerUp)
+      canvas.removeEventListener("wheel", onWheel)
       Object.values(buffers).forEach((b) => gl.deleteBuffer(b))
       gl.deleteProgram(program)
     }
