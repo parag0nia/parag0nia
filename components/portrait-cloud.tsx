@@ -412,11 +412,11 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       gl.uniform1f(uniforms.uTime, t)
 
       // Short depth of field: the focal plane sits between the flat portrait and the front
-      // of the dome, a 0.4-unit band either side stays crisp, and blur peaks 0.8 beyond it.
+      // of the dome, a 0.3-unit band either side stays crisp, and blur peaks 0.6 beyond it.
       gl.uniform1f(uniforms.uFocus, distance - 0.3)
-      gl.uniform1f(uniforms.uSharp, 0.4)
-      gl.uniform1f(uniforms.uRange, 0.8)
-      gl.uniform1f(uniforms.uMaxBlur, 16 * dpr)
+      gl.uniform1f(uniforms.uSharp, 0.3)
+      gl.uniform1f(uniforms.uRange, 0.6)
+      gl.uniform1f(uniforms.uMaxBlur, 24 * dpr)
 
       // Pass 0: in-focus points, opaque, with depth writes.
       gl.uniform1f(uniforms.uPass, 0)
