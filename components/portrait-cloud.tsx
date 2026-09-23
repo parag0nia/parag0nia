@@ -16,6 +16,11 @@ import { useEffect, useRef, useState } from "react"
  *
  * Drag to orbit. Drop an image file onto the canvas to swap the portrait.
  *
+ * The camera has a short depth of field. Points are drawn in two passes through one
+ * program: pass 0 draws the points inside the focal band as crisp opaque discs with
+ * depth writes, pass 1 draws the out-of-focus points as larger, softer, dimmer discs
+ * blended over them. A per-point bokeh suits a sparse cloud better than a screen blur.
+ *
  * The bundled /portrait.png is Picasso's 1907 self-portrait with the studio
  * background keyed out. Replace that file to change the default portrait.
  */
@@ -43,9 +48,16 @@ uniform float uDome;    // scale of the spherical lift
 uniform float uPointSize;
 uniform float uCamDist;  // camera distance, so fog and size are relative to it
 uniform float uTime;
+uniform float uFocus;    // distance from the camera to the focal plane
+uniform float uSharp;    // half-depth of the band that stays crisp
+uniform float uRange;    // depth beyond that band at which blur is strongest
+uniform float uMaxBlur;  // how many pixels an out-of-focus disc grows
+uniform float uPass;     // 0: in-focus points, 1: out-of-focus points
 
 varying vec3 vColor;
 varying float vFade;
+varying float vAlpha;
+varying float vSoft;
 
 void main() {
   vec3 p = vec3(aPos, (aLum - 0.5) * uRelief);
@@ -66,10 +78,22 @@ void main() {
   p.z += burst * 0.03 * sin(uTime * 3.0 + aRand.x * 40.0);
 
   vec4 view = uView * vec4(p, 1.0);
-  gl_Position = uProj * view;
-
   float dist = -view.z;
-  gl_PointSize = uPointSize * (uCamDist / dist);
+
+  float coc = clamp((abs(dist - uFocus) - uSharp) / uRange, 0.0, 1.0);
+  bool blurred = coc > 0.001;
+  if ((uPass < 0.5) == blurred) {
+    // Not this pass's point: park it outside the clip volume.
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
+  gl_Position = uProj * view;
+  float base = uPointSize * (uCamDist / dist);
+  float size = base + coc * uMaxBlur;
+  gl_PointSize = size;
+  vAlpha = pow(base / size, 1.5);
+  vSoft = coc;
   vFade = clamp(1.05 - (dist - uCamDist) * 0.4, 0.45, 1.0);
   vColor = min(aColor * 1.18, 1.0);
 }
@@ -80,11 +104,16 @@ precision mediump float;
 
 varying vec3 vColor;
 varying float vFade;
+varying float vAlpha;
+varying float vSoft;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
-  if (dot(c, c) > 0.25) discard;
-  gl_FragColor = vec4(vColor * vFade, 1.0);
+  float r2 = dot(c, c) * 4.0;
+  if (r2 > 1.0) discard;
+  float soft = 1.0 - smoothstep(0.2, 1.0, r2);
+  float a = mix(1.0, soft, vSoft) * vAlpha;
+  gl_FragColor = vec4(vColor * vFade * a, a);
 }
 `
 
@@ -241,6 +270,11 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       uPointSize: gl.getUniformLocation(program, "uPointSize"),
       uCamDist: gl.getUniformLocation(program, "uCamDist"),
       uTime: gl.getUniformLocation(program, "uTime"),
+      uFocus: gl.getUniformLocation(program, "uFocus"),
+      uSharp: gl.getUniformLocation(program, "uSharp"),
+      uRange: gl.getUniformLocation(program, "uRange"),
+      uMaxBlur: gl.getUniformLocation(program, "uMaxBlur"),
+      uPass: gl.getUniformLocation(program, "uPass"),
     }
 
     const buffers = {
@@ -258,6 +292,7 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
     }
 
     gl.enable(gl.DEPTH_TEST)
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
     gl.clearColor(0.067, 0.067, 0.067, 1)
 
     // Orbit state: auto rotation plus drag with inertia.
@@ -350,6 +385,7 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       autoRotY += dt * 0.28
       dragRotX = Math.max(-1.2, Math.min(1.2, dragRotX))
 
+      gl.depthMask(true)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
       if (!cloud) return
 
@@ -375,6 +411,22 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       gl.uniform1f(uniforms.uCamDist, distance)
       gl.uniform1f(uniforms.uTime, t)
 
+      // Short depth of field: the focal plane sits between the flat portrait and the front
+      // of the dome, a 0.4-unit band either side stays crisp, and blur peaks 0.8 beyond it.
+      gl.uniform1f(uniforms.uFocus, distance - 0.3)
+      gl.uniform1f(uniforms.uSharp, 0.4)
+      gl.uniform1f(uniforms.uRange, 0.8)
+      gl.uniform1f(uniforms.uMaxBlur, 16 * dpr)
+
+      // Pass 0: in-focus points, opaque, with depth writes.
+      gl.uniform1f(uniforms.uPass, 0)
+      gl.disable(gl.BLEND)
+      gl.drawArrays(gl.POINTS, 0, cloud.count)
+
+      // Pass 1: out-of-focus points as soft discs, depth-tested against the crisp ones.
+      gl.uniform1f(uniforms.uPass, 1)
+      gl.depthMask(false)
+      gl.enable(gl.BLEND)
       gl.drawArrays(gl.POINTS, 0, cloud.count)
     }
     raf = requestAnimationFrame(frame)
