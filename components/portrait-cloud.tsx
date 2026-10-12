@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react"
 /**
  * PortraitCloud
  *
- * Samples a 2D portrait into a grid of points, places the grid in 3D and
+ * Samples a 2D portrait into a grid of points, each drawn as the Alpen leaning mark
+ * (a parallelogram, base = height, lean 19.96 degrees), places the grid in 3D and
  * sweeps a sphere across it. Points inside the sphere's footprint are lifted
  * onto its surface, so the flat portrait wraps into a dome and, seen from the
  * side, the grid rows read as the contour lines of a bust.
@@ -108,11 +109,20 @@ varying float vFade;
 varying float vAlpha;
 varying float vSoft;
 
+// Each point is the Alpen mark: a parallelogram with base = height = S, leaning
+// right by tan 0.3631 (19.96 degrees). Corners, in a box S*(1+0.3631) wide and S tall:
+// (0.3631S, 0) (1.3631S, 0) (S, S) (0, S). The box is fitted to the sprite's width and
+// centred vertically, so u and v below run 0..1 across the mark's own base and height.
+const float LEAN = 0.3631;
+const float S = 1.0 / (1.0 + LEAN);
 void main() {
-  vec2 c = gl_PointCoord - 0.5;
-  float r2 = dot(c, c) * 4.0;
-  if (r2 > 1.0) discard;
-  float soft = 1.0 - smoothstep(0.2, 1.0, r2);
+  vec2 p = gl_PointCoord;
+  float v = (p.y - (1.0 - S) * 0.5) / S;
+  float u = (p.x - LEAN * S * (1.0 - v)) / S;
+  float inside = min(min(u, 1.0 - u), min(v, 1.0 - v));
+  if (inside < 0.0) discard;
+  // Crisp marks keep a hard edge; out-of-focus ones fade toward the edge of the same shape.
+  float soft = smoothstep(0.0, 0.45, inside);
   float a = mix(1.0, soft, vSoft) * vAlpha;
   gl_FragColor = vec4(vColor * vFade * a, a);
 }
@@ -227,7 +237,7 @@ function view(rx: number, ry: number, distance: number) {
   ])
 }
 
-export default function PortraitCloud({ src = "/portrait.png", columns = 240, className }: Props) {
+export default function PortraitCloud({ src = "/portrait.png", columns = 200, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [imageSrc, setImageSrc] = useState(src)
   const [error, setError] = useState<string | null>(null)
@@ -418,7 +428,7 @@ export default function PortraitCloud({ src = "/portrait.png", columns = 240, cl
       gl.uniform4f(uniforms.uSphere, cx, 0.05, 0, radius)
       gl.uniform1f(uniforms.uRelief, 0.16)
       gl.uniform1f(uniforms.uDome, 0.55)
-      gl.uniform1f(uniforms.uPointSize, 2.4 * dpr)
+      gl.uniform1f(uniforms.uPointSize, 3.4 * dpr)
       gl.uniform1f(uniforms.uCamDist, distance)
       gl.uniform1f(uniforms.uTime, t)
 
