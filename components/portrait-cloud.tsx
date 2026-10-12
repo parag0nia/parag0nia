@@ -23,8 +23,9 @@ import { useEffect, useRef, useState } from "react"
  * depth writes, pass 1 draws the out-of-focus points as larger, softer, dimmer discs
  * blended over them. A per-point bokeh suits a sparse cloud better than a screen blur.
  *
- * The bundled /portrait.png is Picasso's 1907 self-portrait with the studio
- * background keyed out. Replace that file to change the default portrait.
+ * The default image is the Alpen emblem on black (/alpen-emblem.png); the black ground
+ * is dropped by the brightness threshold. /portrait.png, a keyed-out 1907 Picasso
+ * self-portrait, is kept as an alternative to drop in.
  */
 
 type Props = {
@@ -94,7 +95,7 @@ void main() {
   float base = uPointSize * (uCamDist / dist);
   float size = base + coc * uMaxBlur;
   gl_PointSize = size;
-  vAlpha = pow(base / size, 1.5);
+  vAlpha = pow(base / size, 1.25);
   vSoft = coc;
   vFade = clamp(1.05 - (dist - uCamDist) * 0.4, 0.45, 1.0);
   vColor = min(aColor * 1.18, 1.0);
@@ -237,7 +238,7 @@ function view(rx: number, ry: number, distance: number) {
   ])
 }
 
-export default function PortraitCloud({ src = "/portrait.png", columns = 200, className }: Props) {
+export default function PortraitCloud({ src = "/alpen-emblem.png", columns = 200, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [imageSrc, setImageSrc] = useState(src)
   const [error, setError] = useState<string | null>(null)
